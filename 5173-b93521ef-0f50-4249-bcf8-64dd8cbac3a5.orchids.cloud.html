@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head><script>(function(){
+if(window.__ORCHIDS_PROXY_INJECTED__)return;
+window.__ORCHIDS_PROXY_INJECTED__=true;
+if(window.parent===window)return;
+function s(p){try{window.parent.postMessage(p,"*")}catch(e){}}
+
+/* ── 502 Bad Gateway signal to parent ─────────────────────────── */
+var _lastBadGatewaySignalAt=0;
+console.log("[OrchidsProxy502] injection active");
+function signalBadGateway(meta){
+var now=Date.now();
+if(now-_lastBadGatewaySignalAt<5000){
+console.log("[OrchidsProxy502] throttled",meta||null);
+return;
+}
+_lastBadGatewaySignalAt=now;
+console.log("[OrchidsProxy502] posting PREVIEW_BAD_GATEWAY",meta||null);
+s({type:"PREVIEW_BAD_GATEWAY",status:502,meta:meta||null,timestamp:now});
+}
+if(typeof window.fetch==="function"){
+var _origFetch=window.fetch;
+window.fetch=function(input,init){
+return _origFetch.call(this,input,init).then(function(resp){
+if(resp&&resp.status===502){
+var requestUrl="";
+if(typeof input==="string"){requestUrl=input}
+else if(input&&typeof input.url==="string"){requestUrl=input.url}
+console.log("[OrchidsProxy502] fetch saw 502",requestUrl||resp.url||"");
+signalBadGateway({source:"fetch",url:requestUrl||resp.url||""});
+}
+return resp;
+});
+};
+}
+if(window.XMLHttpRequest&&XMLHttpRequest.prototype){
+var _origXHROpen=XMLHttpRequest.prototype.open;
+var _origXHRSend=XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.open=function(method,url){
+try{this.__orchidsRequestUrl=typeof url==="string"?url:String(url||"")}catch(e){}
+return _origXHROpen.apply(this,arguments);
+};
+XMLHttpRequest.prototype.send=function(){
+this.addEventListener("load",function(){
+if(this.status===502){
+console.log("[OrchidsProxy502] xhr saw 502",this.responseURL||this.__orchidsRequestUrl||"");
+signalBadGateway({source:"xhr",url:this.responseURL||this.__orchidsRequestUrl||""});
+}
+});
+return _origXHRSend.apply(this,arguments);
+};
+}
+
+/* ── Error capture ─────────────────────────────────────────────── */
+window.addEventListener("error",function(e){s({type:"ERROR_CAPTURED",error:{message:e.message,stack:e.error&&e.error.stack,filename:e.filename,lineno:e.lineno,colno:e.colno,source:"window.onerror"},timestamp:Date.now()})});
+window.addEventListener("unhandledrejection",function(e){var r=e.reason;s({type:"ERROR_CAPTURED",error:{message:r&&r.message?r.message:String(r),stack:r&&r.stack,source:"unhandledrejection"},timestamp:Date.now()})});
+var EID=["_expo-static-error","error-overlay","orchids-error-boundary"];
+function chk(){
+var el,txt;
+el=document.getElementById("_expo-static-error");
+if(el&&el.textContent){s({type:"ERROR_CAPTURED",error:{message:el.textContent.slice(0,5000),source:"expo-static-error"},timestamp:Date.now()})}
+el=document.getElementById("error-overlay");
+txt=el&&(el.innerText||el.textContent);
+if(txt){s({type:"ERROR_CAPTURED",error:{message:txt.slice(0,5000),source:"expo-overlay"},timestamp:Date.now()})}
+el=document.getElementById("orchids-error-boundary");
+txt=el&&(el.innerText||el.textContent);
+if(txt){s({type:"ERROR_CAPTURED",error:{message:txt.slice(0,5000),source:"orchids-error-boundary"},timestamp:Date.now()})}
+}
+function obs(root){
+new MutationObserver(function(muts){
+for(var i=0;i<muts.length;i++){for(var j=0;j<muts[i].addedNodes.length;j++){var n=muts[i].addedNodes[j];
+if(n.nodeType===1&&(EID.indexOf(n.id)!==-1||(n.querySelector&&n.querySelector("#_expo-static-error,#error-overlay,#orchids-error-boundary")))){chk();return}
+}}}).observe(root,{childList:true,subtree:true});
+chk();
+}
+if(document.body||document.documentElement){obs(document.body||document.documentElement)}
+else{document.addEventListener("DOMContentLoaded",function(){obs(document.body||document.documentElement)})}
+
+/* ── Route navigation messenger (mirrors route-messenger.ts) ── */
+var _curPath="",_curSearch="",_hasInit=false;
+function sendRoute(){
+var p=window.location.pathname,q=window.location.search;
+if(p===_curPath&&q===_curSearch&&_hasInit)return;
+_curPath=p;_curSearch=q;_hasInit=true;
+var full=q?p+q:p;
+s({type:"ROUTE_CHANGE",data:{pathname:p,search:q.replace("?",""),fullUrl:full,timestamp:Date.now(),origin:window.location.origin}});
+}
+var _origPush=history.pushState,_origReplace=history.replaceState;
+history.pushState=function(){_origPush.apply(history,arguments);setTimeout(sendRoute,0)};
+history.replaceState=function(){_origReplace.apply(history,arguments);setTimeout(sendRoute,0)};
+window.addEventListener("popstate",function(){setTimeout(sendRoute,0)});
+window.addEventListener("hashchange",function(){setTimeout(sendRoute,0)});
+setInterval(function(){var p=window.location.pathname,q=window.location.search;if(p!==_curPath||q!==_curSearch)sendRoute()},1000);
+sendRoute();
+
+/* ── Browser logs loader ── */
+try{
+  var pid="";
+  try{
+    var n=window.name||"";
+    var m=n.match(/orchids:projectId=([a-zA-Z0-9_-]+)/);
+    if(m&&m[1]){pid=m[1]}else if(n&&n.charAt(0)==="{"){
+      var obj=JSON.parse(n);
+      if(obj&&obj.orchidsProjectId){pid=String(obj.orchidsProjectId)}
+    }
+  }catch(e){}
+  var script=document.createElement("script");
+  script.id="orchids-browser-logs";
+  script.async=true;
+  script.setAttribute("inject-source", "cloudflare-worker");
+  script.src="https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/scripts/orchids-browser-logs.js";
+  if(pid){script.setAttribute("data-orchids-project-id",pid)}
+  (document.head||document.documentElement).appendChild(script);
+}catch(e){}
+})()</script>
+    <script type="module">import { injectIntoGlobalHook } from "/@react-refresh";
+injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;</script>
+
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Primary SEO -->
+    <title>Technoshark – Shop the Best Products Online</title>
+    <meta name="description" content="Technoshark is your go-to online shop for premium products. Browse our catalog, add to cart and order directly via WhatsApp. Fast, easy and reliable." />
+    <meta name="keywords" content="Technoshark, online shop, buy online, premium products, WhatsApp store" />
+    <meta name="author" content="Technoshark" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph (Facebook, WhatsApp preview) -->
+    <meta property="og:title" content="Technoshark – Shop the Best Products Online" />
+    <meta property="og:description" content="Browse Technoshark's catalog and order directly via WhatsApp. Fast, easy and reliable." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Technoshark" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Technoshark – Shop the Best Products Online" />
+    <meta name="twitter:description" content="Browse Technoshark's catalog and order directly via WhatsApp." />
+
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦈</text></svg>" />
+
+    <!-- Canonical -->
+    <link rel="canonical" href="https://technoshark.com/" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx?t=1773230533103"></script>
+  <script>(function(){
+if(window.__ORCHIDS_PROXY_INJECTED__)return;
+window.__ORCHIDS_PROXY_INJECTED__=true;
+if(window.parent===window)return;
+function s(p){try{window.parent.postMessage(p,"*")}catch(e){}}
+
+/* ── 502 Bad Gateway signal to parent ─────────────────────────── */
+var _lastBadGatewaySignalAt=0;
+console.log("[OrchidsProxy502] injection active");
+function signalBadGateway(meta){
+var now=Date.now();
+if(now-_lastBadGatewaySignalAt<5000){
+console.log("[OrchidsProxy502] throttled",meta||null);
+return;
+}
+_lastBadGatewaySignalAt=now;
+console.log("[OrchidsProxy502] posting PREVIEW_BAD_GATEWAY",meta||null);
+s({type:"PREVIEW_BAD_GATEWAY",status:502,meta:meta||null,timestamp:now});
+}
+if(typeof window.fetch==="function"){
+var _origFetch=window.fetch;
+window.fetch=function(input,init){
+return _origFetch.call(this,input,init).then(function(resp){
+if(resp&&resp.status===502){
+var requestUrl="";
+if(typeof input==="string"){requestUrl=input}
+else if(input&&typeof input.url==="string"){requestUrl=input.url}
+console.log("[OrchidsProxy502] fetch saw 502",requestUrl||resp.url||"");
+signalBadGateway({source:"fetch",url:requestUrl||resp.url||""});
+}
+return resp;
+});
+};
+}
+if(window.XMLHttpRequest&&XMLHttpRequest.prototype){
+var _origXHROpen=XMLHttpRequest.prototype.open;
+var _origXHRSend=XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.open=function(method,url){
+try{this.__orchidsRequestUrl=typeof url==="string"?url:String(url||"")}catch(e){}
+return _origXHROpen.apply(this,arguments);
+};
+XMLHttpRequest.prototype.send=function(){
+this.addEventListener("load",function(){
+if(this.status===502){
+console.log("[OrchidsProxy502] xhr saw 502",this.responseURL||this.__orchidsRequestUrl||"");
+signalBadGateway({source:"xhr",url:this.responseURL||this.__orchidsRequestUrl||""});
+}
+});
+return _origXHRSend.apply(this,arguments);
+};
+}
+
+/* ── Error capture ─────────────────────────────────────────────── */
+window.addEventListener("error",function(e){s({type:"ERROR_CAPTURED",error:{message:e.message,stack:e.error&&e.error.stack,filename:e.filename,lineno:e.lineno,colno:e.colno,source:"window.onerror"},timestamp:Date.now()})});
+window.addEventListener("unhandledrejection",function(e){var r=e.reason;s({type:"ERROR_CAPTURED",error:{message:r&&r.message?r.message:String(r),stack:r&&r.stack,source:"unhandledrejection"},timestamp:Date.now()})});
+var EID=["_expo-static-error","error-overlay","orchids-error-boundary"];
+function chk(){
+var el,txt;
+el=document.getElementById("_expo-static-error");
+if(el&&el.textContent){s({type:"ERROR_CAPTURED",error:{message:el.textContent.slice(0,5000),source:"expo-static-error"},timestamp:Date.now()})}
+el=document.getElementById("error-overlay");
+txt=el&&(el.innerText||el.textContent);
+if(txt){s({type:"ERROR_CAPTURED",error:{message:txt.slice(0,5000),source:"expo-overlay"},timestamp:Date.now()})}
+el=document.getElementById("orchids-error-boundary");
+txt=el&&(el.innerText||el.textContent);
+if(txt){s({type:"ERROR_CAPTURED",error:{message:txt.slice(0,5000),source:"orchids-error-boundary"},timestamp:Date.now()})}
+}
+function obs(root){
+new MutationObserver(function(muts){
+for(var i=0;i<muts.length;i++){for(var j=0;j<muts[i].addedNodes.length;j++){var n=muts[i].addedNodes[j];
+if(n.nodeType===1&&(EID.indexOf(n.id)!==-1||(n.querySelector&&n.querySelector("#_expo-static-error,#error-overlay,#orchids-error-boundary")))){chk();return}
+}}}).observe(root,{childList:true,subtree:true});
+chk();
+}
+if(document.body||document.documentElement){obs(document.body||document.documentElement)}
+else{document.addEventListener("DOMContentLoaded",function(){obs(document.body||document.documentElement)})}
+
+/* ── Route navigation messenger (mirrors route-messenger.ts) ── */
+var _curPath="",_curSearch="",_hasInit=false;
+function sendRoute(){
+var p=window.location.pathname,q=window.location.search;
+if(p===_curPath&&q===_curSearch&&_hasInit)return;
+_curPath=p;_curSearch=q;_hasInit=true;
+var full=q?p+q:p;
+s({type:"ROUTE_CHANGE",data:{pathname:p,search:q.replace("?",""),fullUrl:full,timestamp:Date.now(),origin:window.location.origin}});
+}
+var _origPush=history.pushState,_origReplace=history.replaceState;
+history.pushState=function(){_origPush.apply(history,arguments);setTimeout(sendRoute,0)};
+history.replaceState=function(){_origReplace.apply(history,arguments);setTimeout(sendRoute,0)};
+window.addEventListener("popstate",function(){setTimeout(sendRoute,0)});
+window.addEventListener("hashchange",function(){setTimeout(sendRoute,0)});
+setInterval(function(){var p=window.location.pathname,q=window.location.search;if(p!==_curPath||q!==_curSearch)sendRoute()},1000);
+sendRoute();
+
+/* ── Browser logs loader ── */
+try{
+  var pid="";
+  try{
+    var n=window.name||"";
+    var m=n.match(/orchids:projectId=([a-zA-Z0-9_-]+)/);
+    if(m&&m[1]){pid=m[1]}else if(n&&n.charAt(0)==="{"){
+      var obj=JSON.parse(n);
+      if(obj&&obj.orchidsProjectId){pid=String(obj.orchidsProjectId)}
+    }
+  }catch(e){}
+  var script=document.createElement("script");
+  script.id="orchids-browser-logs";
+  script.async=true;
+  script.setAttribute("inject-source", "cloudflare-worker");
+  script.src="https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/scripts/orchids-browser-logs.js";
+  if(pid){script.setAttribute("data-orchids-project-id",pid)}
+  (document.head||document.documentElement).appendChild(script);
+}catch(e){}
+})()</script></body>
+</html>
